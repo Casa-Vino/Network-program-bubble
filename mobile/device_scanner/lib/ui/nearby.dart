@@ -33,11 +33,12 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
     if (_android) {
       subscription =
           events.receiveBroadcastStream().listen(onEvent, onError: (Object e) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             scanning = false;
             addMessage('$e');
           });
+        }
       });
       refreshCapabilities();
     }
@@ -105,11 +106,12 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
       setState(() => scanning = true);
       await channel.invokeMethod<void>('start');
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           scanning = false;
           addMessage('Could not start: $e');
         });
+      }
     } finally {
       if (mounted) {
         setState(() => starting = false);
@@ -302,12 +304,14 @@ class _SignalPainter extends CustomPainter {
           ? size.width / 2
           : size.width * i / (values.length - 1);
       final y = size.height * (1 - (values[i] + 110).clamp(0, 90) / 90);
-      if (i == 0)
+      if (i == 0) {
         path.moveTo(x, y);
-      else
+      } else {
         path.lineTo(x, y);
-      if (values.length == 1)
+      }
+      if (values.length == 1) {
         canvas.drawCircle(Offset(x, y), 3, Paint()..color = color);
+      }
     }
     canvas.drawPath(
         path,

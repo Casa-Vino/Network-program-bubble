@@ -1,0 +1,2 @@
+# Android preparation runs on Linux in GitHub Actions, including Windows-authored changes.
+*.sh text eol=lf

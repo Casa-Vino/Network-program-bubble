@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,11 +17,12 @@ void main() {
     stopped = 0;
     started = 0;
     messenger.setMockMethodCallHandler(radio, (call) async {
-      if (call.method == 'capabilities')
+      if (call.method == 'capabilities') {
         return {
           'Phone': 'S21 Ultra test fixture',
           'UWB hardware (ranging not implemented)': true
         };
+      }
       if (call.method == 'start') started++;
       if (call.method == 'stop') stopped++;
       return null;
