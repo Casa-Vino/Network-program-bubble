@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/radio_device.dart';
+import 'signal_cloud.dart';
 
 class NearbyPage extends StatefulWidget {
   const NearbyPage({super.key});
@@ -23,6 +24,7 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
   Timer? clock;
   bool scanning = false;
   bool starting = false;
+  bool cloudMode = false;
   String? selected;
   Map<dynamic, dynamic> capabilities = {};
 
@@ -153,6 +155,11 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
     final target = selected == null ? null : devices[selected];
     return Scaffold(
       appBar: AppBar(title: const Text('Bubble · Nearby'), actions: [
+        if (_android)
+          IconButton(
+              tooltip: cloudMode ? 'Show device list' : 'Show signal cloud',
+              icon: Icon(cloudMode ? Icons.list : Icons.blur_on),
+              onPressed: () => setState(() => cloudMode = !cloudMode)),
         IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'Phone capabilities',
@@ -204,82 +211,91 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
               child: Text(
                   'Wireless discovery currently requires Android.\nUse the Network screen for desktop LAN scanning.',
                   textAlign: TextAlign.center))
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
-              children: [
-                  const Text(
-                      'Scan nearby Wi-Fi access points and discoverable Bluetooth devices. Tap a result to follow its signal. Each scan lasts 30 seconds.'),
-                  const SizedBox(height: 8),
-                  const Text(
-                      'Signal strength is not a distance or bearing. Walls, movement and transmit power affect it. Devices can rotate addresses; names do not prove identity.'),
-                  if (scanning)
-                    const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator()),
-                  if (target != null && target.history.isNotEmpty)
-                    Card(
-                        child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Following ${target.label}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge),
-                                  Text(
-                                      '${target.smoothed.toStringAsFixed(0)} dBm smoothed · last seen ${age(target)}'),
-                                  Text(DateTime.now()
-                                              .difference(target.latest.time)
-                                              .inSeconds >
-                                          15
-                                      ? 'Signal is stale; scan again or wait for another advertisement.'
-                                      : target.trend),
-                                  const SizedBox(height: 12),
-                                  SizedBox(
-                                      height: 90,
-                                      width: double.infinity,
-                                      child: CustomPaint(
-                                          painter: _SignalPainter(
-                                              target.history
-                                                  .map((s) => s.rssi)
-                                                  .toList(),
-                                              Theme.of(context)
-                                                  .colorScheme
-                                                  .primary))),
-                                  const Text(
-                                      'Last 120 observations · signal strength, not metres'),
-                                  TextButton(
-                                      onPressed: () =>
-                                          setState(() => selected = null),
-                                      child: const Text('Stop following')),
-                                ]))),
-                  for (final message in messages)
-                    Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Text(message)),
-                  const SizedBox(height: 12),
-                  Text('${list.length} wireless identities observed',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  if (list.isEmpty)
-                    const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                            'Tap Scan nearby. Enable Bluetooth and Location services for the widest discovery.')),
-                  for (final d in list)
-                    Card(
-                        child: ListTile(
-                            leading:
-                                Icon(d.isWifi ? Icons.wifi : Icons.bluetooth),
-                            title: Text(d.label),
-                            subtitle: Text(
-                                '${d.methods.join(' + ')} · ${d.address}\n${d.latest.rssi} dBm · last seen ${age(d)}\n${d.detail}'),
-                            isThreeLine: true,
-                            trailing: Icon(selected == d.key
-                                ? Icons.track_changes
-                                : Icons.chevron_right),
-                            onTap: () => setState(() => selected = d.key))),
-                ]),
+          : cloudMode
+              ? SignalCloud(
+                  devices: list,
+                  scanning: scanning,
+                  selected: selected,
+                  onSelect: (key) => setState(() => selected = key),
+                  status: messages.isEmpty ? '' : messages.last)
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+                  children: [
+                      const Text(
+                          'Scan nearby Wi-Fi access points and discoverable Bluetooth devices. Tap a result to follow its signal. Each scan lasts 30 seconds.'),
+                      const SizedBox(height: 8),
+                      const Text(
+                          'Signal strength is not a distance or bearing. Walls, movement and transmit power affect it. Devices can rotate addresses; names do not prove identity.'),
+                      if (scanning)
+                        const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: LinearProgressIndicator()),
+                      if (target != null && target.history.isNotEmpty)
+                        Card(
+                            child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Following ${target.label}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge),
+                                      Text(
+                                          '${target.smoothed.toStringAsFixed(0)} dBm smoothed · last seen ${age(target)}'),
+                                      Text(DateTime.now()
+                                                  .difference(
+                                                      target.latest.time)
+                                                  .inSeconds >
+                                              15
+                                          ? 'Signal is stale; scan again or wait for another advertisement.'
+                                          : target.trend),
+                                      const SizedBox(height: 12),
+                                      SizedBox(
+                                          height: 90,
+                                          width: double.infinity,
+                                          child: CustomPaint(
+                                              painter: _SignalPainter(
+                                                  target.history
+                                                      .map((s) => s.rssi)
+                                                      .toList(),
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .primary))),
+                                      const Text(
+                                          'Last 120 observations · signal strength, not metres'),
+                                      TextButton(
+                                          onPressed: () =>
+                                              setState(() => selected = null),
+                                          child: const Text('Stop following')),
+                                    ]))),
+                      for (final message in messages)
+                        Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Text(message)),
+                      const SizedBox(height: 12),
+                      Text('${list.length} wireless identities observed',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      if (list.isEmpty)
+                        const Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text(
+                                'Tap Scan nearby. Enable Bluetooth and Location services for the widest discovery.')),
+                      for (final d in list)
+                        Card(
+                            child: ListTile(
+                                leading: Icon(
+                                    d.isWifi ? Icons.wifi : Icons.bluetooth),
+                                title: Text(d.label),
+                                subtitle: Text(
+                                    '${d.methods.join(' + ')} · ${d.address}\n${d.latest.rssi} dBm · last seen ${age(d)}\n${d.detail}'),
+                                isThreeLine: true,
+                                trailing: Icon(selected == d.key
+                                    ? Icons.track_changes
+                                    : Icons.chevron_right),
+                                onTap: () => setState(() => selected = d.key))),
+                    ]),
     );
   }
 }

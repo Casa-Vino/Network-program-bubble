@@ -105,4 +105,35 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('switching cloud mode preserves discovery and selection',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: NearbyPage()));
+    await tester.pump();
+    await tester.tap(find.text('Scan nearby'));
+    await tester.pump();
+    await emit({
+      'type': 'observation',
+      'kind': 'ble',
+      'address': 'AA:BB',
+      'name': 'Keys',
+      'detail': '',
+      'rssi': -55,
+      'time': DateTime.now().millisecondsSinceEpoch
+    });
+    await tester.pump();
+    await tester.tap(find.byTooltip('Show signal cloud'));
+    await tester.pump();
+    expect(find.text('SIGNAL CLOUD'), findsOneWidget);
+    expect(find.text('Stop scan'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Keys'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Show device list'));
+    await tester.pump();
+    expect(find.text('Following Keys'), findsOneWidget);
+    expect(started, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }

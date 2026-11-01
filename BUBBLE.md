@@ -33,7 +33,23 @@ range with them. No radar bearings, metre estimates, room geometry or universal
 ring commands are invented. Signal trends can suggest warmer/colder but walls,
 body shielding and transmitter power can change readings without any movement.
 
-## Build
+## Signal Cloud view
+
+On Nearby, tap the cloud icon to switch between the device list and a dark,
+LiDAR-inspired point-cloud display. Every dot represents an observed RSSI sample.
+Radius encodes received signal strength, height encodes sample age, and each
+identity gets a stable angular lane for readability. These coordinates are
+abstract: they do not locate the transmitter or map a room. The animated sweep
+is a visual effect, not a directional radio measurement. No camera is used.
+
+Drag to orbit. Tap a point or source button to select a source; isolate it with
+the filter button. Freeze holds the displayed cloud while discovery continues;
+resume returns to current observations. Trails expire after 120 seconds, with
+up to 60 displayed samples per identity and 6,000 points overall. Wi-Fi is mint,
+BLE cyan and Classic Bluetooth amber. Switching views keeps the active scan and
+selected source. Existing 30-second foreground scan limits still apply.
+
+## Build instructions
 
 Use Flutter 3.24.0 (matching CI). Generate the platform scaffold before building:
 
