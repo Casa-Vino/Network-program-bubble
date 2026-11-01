@@ -51,6 +51,12 @@ selected source. Existing 30-second foreground scan limits still apply.
 
 ## Experimental Room scan
 
+Room scan has a flashlight toggle in the top bar. After starting the camera,
+tap the flashlight icon to keep the active camera's LED on while mapping.
+It uses ARCore's torch configuration, checks that camera's flash capability,
+and turns off on pause/exit. Returning to the app starts with the light off;
+tap it again when needed. Unsupported cameras leave the toggle disabled.
+
 Nearby > select a device > Room scan (cube icon). Review the Google ARCore notice,
 start the camera and grant permission. If prompted, install/update Google Play
 Services for AR and reopen Room scan. Move slowly around textured, well-lit

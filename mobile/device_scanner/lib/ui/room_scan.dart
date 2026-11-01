@@ -27,6 +27,10 @@ class _RoomScanPageState extends State<RoomScanPage>
   final map = RoomMap();
   StreamSubscription<dynamic>? events;
   bool camera = false, requesting = false, refreshing = false;
+  bool torch = false,
+      torchAvailable = false,
+      cameraActive = false,
+      torchPending = false;
   String status =
       'Start the camera, then move slowly across textured surfaces in good light.';
   double yaw = 0.3, tilt = 0.45, zoom = 35;
@@ -40,7 +44,14 @@ class _RoomScanPageState extends State<RoomScanPage>
       if (!mounted || value is! Map) return;
       setState(() {
         status = value['state'] as String? ?? status;
-        map.frame(value, widget.source);
+        if (value.containsKey('tracking')) map.frame(value, widget.source);
+        if (value['torch'] is bool) torch = value['torch'] as bool;
+        if (value['torchAvailable'] is bool) {
+          torchAvailable = value['torchAvailable'] as bool;
+        }
+        if (value['cameraActive'] is bool) {
+          cameraActive = value['cameraActive'] as bool;
+        }
       });
     }, onError: (Object e) {
       if (mounted) {
@@ -67,6 +78,23 @@ class _RoomScanPageState extends State<RoomScanPage>
     });
   }
 
+  Future<void> toggleTorch() async {
+    if (torchPending) return;
+    setState(() => torchPending = true);
+    try {
+      final enabled = await const MethodChannel('bubble/room')
+          .invokeMethod<bool>('setTorch', {'enabled': !torch});
+      if (mounted && cameraActive) setState(() => torch = enabled ?? false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not change flashlight: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => torchPending = false);
+    }
+  }
+
   Future<void> refresh() async {
     if (refreshing) return;
     setState(() => refreshing = true);
@@ -80,7 +108,11 @@ class _RoomScanPageState extends State<RoomScanPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed && mounted) {
-      setState(() => map.tracking = false);
+      setState(() {
+        map.tracking = false;
+        torch = false;
+        cameraActive = false;
+      });
     }
   }
 
@@ -95,6 +127,13 @@ class _RoomScanPageState extends State<RoomScanPage>
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: const Color(0xFF050B0C),
         appBar: AppBar(title: const Text('Bubble · Room scan'), actions: [
+          IconButton(
+              tooltip: torch ? 'Turn flashlight off' : 'Turn flashlight on',
+              onPressed: cameraActive && torchAvailable && !torchPending
+                  ? toggleTorch
+                  : null,
+              color: torch ? Colors.amber : null,
+              icon: Icon(torch ? Icons.flashlight_on : Icons.flashlight_off)),
           IconButton(
               tooltip: 'Reset viewing angle',
               onPressed: () => setState(() {

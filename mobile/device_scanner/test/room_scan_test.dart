@@ -7,14 +7,23 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const events = MethodChannel('bubble/room/events');
   const permissions = MethodChannel('flutter.baseflow.com/permissions/methods');
+  const room = MethodChannel('bubble/room');
+  final torchCommands = <bool>[];
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   setUp(() {
+    torchCommands.clear();
+    messenger.setMockMethodCallHandler(room, (call) async {
+      final enabled = (call.arguments as Map)['enabled'] as bool;
+      torchCommands.add(enabled);
+      return enabled;
+    });
     messenger.setMockMethodCallHandler(events, (_) async => null);
     messenger.setMockMethodCallHandler(permissions,
         (call) async => {for (final id in call.arguments as List) id: 0});
   });
   tearDown(() {
+    messenger.setMockMethodCallHandler(room, null);
     messenger.setMockMethodCallHandler(events, null);
     messenger.setMockMethodCallHandler(permissions, null);
   });
@@ -42,5 +51,39 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets(
+      'flashlight follows camera capability, command acknowledgement and pause',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: RoomScanPage(
+            refreshSignals: () async {},
+            signalsActive: () => false,
+            signalStatus: () => '')));
+    await tester.pump();
+    IconButton button() => tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.flashlight_off));
+    expect(button().onPressed, isNull);
+    Future<void> emit(Map<String, Object> event) async {
+      await messenger.handlePlatformMessage('bubble/room/events',
+          const StandardMethodCodec().encodeSuccessEnvelope(event), (_) {});
+      await tester.pump();
+    }
+
+    await emit({'torchAvailable': true, 'cameraActive': true, 'torch': false});
+    expect(button().onPressed, isNotNull);
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.flashlight_off));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byTooltip('Turn flashlight off'), findsOneWidget);
+    await tester.tap(find.byTooltip('Turn flashlight off'));
+    await tester.pump();
+    await tester.pump();
+    expect(torchCommands, [true, false]);
+    await emit({'cameraActive': false, 'torch': false});
+    expect(button().onPressed, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }

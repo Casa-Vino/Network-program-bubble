@@ -1,6 +1,9 @@
 package com.casavino.bubble
 
 import android.app.Activity
+import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
@@ -14,6 +17,7 @@ import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.NotYetAvailableException
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
@@ -27,6 +31,14 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
     private val main = Handler(Looper.getMainLooper())
     private var active: RoomView? = null
     init {
+        MethodChannel(messenger, "bubble/room").setMethodCallHandler { call, result ->
+            if (call.method != "setTorch") result.notImplemented()
+            else {
+                val view = active
+                if (view == null) result.error("camera_inactive", "Start the room camera first", null)
+                else view.setTorch(call.argument<Boolean>("enabled") == true, result)
+            }
+        }
         EventChannel(messenger, "bubble/room/events").setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink) { sink = events }
             override fun onCancel(arguments: Any?) { sink = null }
@@ -46,9 +58,12 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
         private var session: Session? = null
         @Volatile private var running = false
         @Volatile private var disposed = false
+        @Volatile private var lifecycleEpoch = 0
         private var texture = 0
         private var lastFrame = 0L
         private var lastDepth = 0L
+        private var flashAvailable = false
+        private var torch = false
         init {
             surface.setEGLContextClientVersion(2)
             surface.preserveEGLContextOnPause = true
@@ -65,6 +80,11 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
                         val config = Config(s).apply { depthMode = Config.DepthMode.AUTOMATIC }
                         s.configure(config)
                         session = s
+                        flashAvailable = runCatching {
+                            val manager = activity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                            manager.getCameraCharacteristics(s.cameraConfig.cameraId)
+                                .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                        }.getOrDefault(false)
                         resume()
                     }
                 }
@@ -74,17 +94,38 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
         fun resume() {
             if (disposed || running) return
             try {
-                session?.resume() ?: return
+                session?.let { it.configure(it.config.apply { flashMode = Config.FlashMode.OFF }); it.resume() } ?: return
+                torch = false
                 running = true
                 surface.onResume()
+                emit(mapOf("torch" to false, "torchAvailable" to flashAvailable, "cameraActive" to true))
             } catch (e: Exception) { emit(mapOf("state" to "Camera unavailable: ${e.message}. Reopen Room scan to retry.")) }
         }
         fun pause() {
             if (!running) return
+            lifecycleEpoch++
             running = false
             surface.onPause()
+            try { session?.let { it.configure(it.config.apply { flashMode = Config.FlashMode.OFF }) } } catch (_: Exception) {}
+            torch = false
             session?.pause()
-            emit(mapOf("state" to "Room scan paused", "tracking" to false))
+            emit(mapOf("state" to "Room scan paused", "tracking" to false, "torch" to false, "cameraActive" to false))
+        }
+        fun setTorch(enabled: Boolean, result: MethodChannel.Result) {
+            if (!running || disposed) { result.error("camera_inactive", "Start the room camera first", null); return }
+            if (!flashAvailable) { result.error("torch_unavailable", "This camera does not support a flashlight", null); return }
+            // Serialise configuration with ARCore updates on the GL thread.
+            val requestedEpoch = lifecycleEpoch
+            surface.queueEvent {
+                try {
+                    val s = session
+                    if (!running || disposed || s == null || requestedEpoch != lifecycleEpoch) throw IllegalStateException("Room camera is paused")
+                    s.configure(s.config.apply { flashMode = if (enabled) Config.FlashMode.TORCH else Config.FlashMode.OFF })
+                    torch = enabled
+                    emit(mapOf("torch" to torch))
+                    main.post { result.success(torch) }
+                } catch (e: Exception) { main.post { result.error("torch_failed", "Flashlight: ${e.message}", null) } }
+            }
         }
         override fun dispose() {
             if (disposed) return
