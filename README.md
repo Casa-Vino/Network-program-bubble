@@ -1,3 +1,11 @@
+# Bubble
+
+This repository is the foundation of Bubble, a nearby wireless discovery and
+network assessment app derived from Device Scanner. See [BUBBLE.md](BUBBLE.md)
+for the Android features, limitations, build instructions and S21 Ultra checks.
+
+The original Python network inventory tool is retained below.
+
 # netinv
 
 A LAN device **discovery + fingerprinting** core: the highest effort-to-payoff

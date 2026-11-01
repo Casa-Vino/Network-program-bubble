@@ -1,4 +1,4 @@
-package com.casavino.device_scanner
+package com.casavino.bubble
 
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -15,9 +15,11 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channelName = "device_scanner/multicast"
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var radio: BubbleRadio? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        radio = BubbleRadio(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -53,7 +55,13 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        radio?.stop()
         releaseLock()
         super.onDestroy()
+    }
+
+    override fun onStop() {
+        radio?.stop()
+        super.onStop()
     }
 }

@@ -7,3 +7,8 @@ venv/
 build/
 dist/
 .pytest_cache/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+mobile/device_scanner/android/
+mobile/device_scanner/windows/

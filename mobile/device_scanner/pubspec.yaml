@@ -1,5 +1,5 @@
 name: device_scanner
-description: Discover and identify devices on your Wi-Fi network (Android-first).
+description: Bubble nearby wireless discovery and local network assessment.
 publish_to: "none"
 version: 0.1.0+1
 
@@ -23,6 +23,8 @@ dependencies:
   wakelock_plus: ^1.2.5
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   flutter_lints: ^3.0.0
 
 flutter:

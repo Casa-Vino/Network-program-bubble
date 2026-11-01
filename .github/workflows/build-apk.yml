@@ -7,7 +7,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [add-mobile-scanner-app, main]
+    branches: [add-mobile-scanner-app, main, bubble-foundation]
     paths:
       - "mobile/device_scanner/**"
       - ".github/workflows/build-apk.yml"
@@ -39,10 +39,11 @@ jobs:
           mkdir -p /tmp/appsrc
           cp pubspec.yaml /tmp/appsrc/pubspec.yaml
           cp -r lib /tmp/appsrc/lib
+          cp -r test /tmp/appsrc/test
 
       - name: Generate Android scaffold
         working-directory: mobile/device_scanner
-        run: flutter create --platforms=android --org com.casavino --project-name device_scanner .
+        run: flutter create --platforms=android --org com.casavino --project-name bubble .
 
       - name: Restore app sources
         working-directory: mobile/device_scanner
@@ -50,6 +51,8 @@ jobs:
           cp /tmp/appsrc/pubspec.yaml pubspec.yaml
           rm -rf lib
           cp -r /tmp/appsrc/lib lib
+          rm -rf test
+          cp -r /tmp/appsrc/test test
 
       - name: Prepare Android scaffold (permissions + native overlay)
         working-directory: mobile/device_scanner
@@ -58,6 +61,12 @@ jobs:
       - name: Install dependencies
         working-directory: mobile/device_scanner
         run: flutter pub get
+
+      - name: Analyze Bubble additions and run tests
+        working-directory: mobile/device_scanner
+        run: |
+          flutter analyze lib/models/radio_device.dart lib/ui/nearby.dart test
+          flutter test
 
       # Sign every build with the committed debug keystore so updates install
       # over the top instead of hitting a signature conflict.
@@ -102,7 +111,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: device-scanner-debug-apk
+          name: bubble-debug-apk
           path: mobile/device_scanner/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
 
@@ -110,7 +119,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: mobile-latest
-          name: Device Scanner — latest debug build
+          name: Bubble — latest debug build
           prerelease: true
           body: |
             Debug APK auto-built from commit ${{ github.sha }}.

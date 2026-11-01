@@ -7,7 +7,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."  # -> mobile/device_scanner
 MANIFEST="android/app/src/main/AndroidManifest.xml"
-KOTLIN_DST="android/app/src/main/kotlin/com/casavino/device_scanner/MainActivity.kt"
+KOTLIN_DST="android/app/src/main/kotlin/com/casavino/bubble/MainActivity.kt"
 OVERLAY="android_overlay/MainActivity.kt"
 
 [[ -f "$MANIFEST" ]] || {
@@ -26,7 +26,14 @@ else
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <queries>
@@ -48,14 +55,30 @@ XML
   echo "Injected permissions + queries into $MANIFEST"
 fi
 
+# Upgrade previously generated scaffolds as well as preparing fresh ones.
+# Location inference is part of Bubble, so neverForLocation is inappropriate.
+sed -i 's/ android:usesPermissionFlags="neverForLocation"//g' "$MANIFEST"
+for permission in ACCESS_COARSE_LOCATION CHANGE_WIFI_STATE BLUETOOTH_SCAN BLUETOOTH_CONNECT; do
+  if ! grep -q "android.permission.$permission\"" "$MANIFEST"; then
+    sed -i "/<application/i\\    <uses-permission android:name=\"android.permission.$permission\" />" "$MANIFEST"
+  fi
+done
+if ! grep -q 'android.permission.BLUETOOTH_ADMIN' "$MANIFEST"; then
+  sed -i '/<application/i\    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />' "$MANIFEST"
+fi
+
 # 2) Native MainActivity with the multicast-lock channel.
 if [[ -f "$OVERLAY" ]]; then
   mkdir -p "$(dirname "$KOTLIN_DST")"
   cp "$OVERLAY" "$KOTLIN_DST"
+  cp android_overlay/BubbleRadio.kt "$(dirname "$KOTLIN_DST")/BubbleRadio.kt"
   echo "Installed MainActivity overlay at $KOTLIN_DST"
 else
   echo "WARNING: $OVERLAY missing; mDNS multicast lock will be unavailable." >&2
 fi
+
+# Distinct launcher name; package identity comes from flutter create --project-name bubble.
+sed -i -E 's/android:label="[^"]*"/android:label="Bubble"/' "$MANIFEST"
 
 # 3) Align the Kotlin Gradle plugin with the kotlin-stdlib that plugins such as
 #    url_launcher pull in (1.9.x); the scaffold's default is older and fails

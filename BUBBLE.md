@@ -1,0 +1,76 @@
+# Bubble
+
+Bubble is an independent continuation of Device Scanner, targeting Android first.
+The original MIT licence is retained. The Android package is `com.casavino.bubble`,
+so it installs alongside `com.casavino.device_scanner`. Updates come from
+`Casa-Vino/Network-program-bubble`, not the original repository.
+
+## First version
+
+The Network screen retains the existing TCP/mDNS scanner and file-transfer tools.
+Tap the radar icon to open Nearby. Grant Nearby devices and precise Location
+permissions, enable Bluetooth and Location services, then tap Scan nearby.
+
+Each foreground session lasts 30 seconds: Wi-Fi refresh and Classic Bluetooth
+inquiry, followed after 13 seconds by Bluetooth LE scanning. Scans stop when the
+app leaves the foreground or the screen closes. Every method reports failures
+independently, so a denied Bluetooth permission does not discard Wi-Fi results.
+
+Tap an observation to follow its signal history. Scan again to gather more
+samples. History is kept in memory for this screen only, bounded to 120 samples
+per identity. The graph plots observations, not elapsed time. Stale readings are
+labelled, and cached Wi-Fi timestamps do not create fresh history entries.
+Android limits Wi-Fi scan frequency, so rapid repeated scans may return old data.
+
+BLE and Classic observations merge only for an identical Bluetooth address.
+Wi-Fi access points are separate identities, even if their names match Bluetooth
+devices. Random/private addresses may change. An observed name is not verified
+ownership or identity. Wi-Fi scans list access points, not every Wi-Fi client.
+
+Capabilities reports actual platform feature flags, radio state and permissions.
+Wi-Fi RTT, Wi-Fi Aware and UWB are capability checks only; this version does not
+range with them. No radar bearings, metre estimates, room geometry or universal
+ring commands are invented. Signal trends can suggest warmer/colder but walls,
+body shielding and transmitter power can change readings without any movement.
+
+## Build
+
+Use Flutter 3.24.0 (matching CI). Generate the platform scaffold before building:
+
+```sh
+cd mobile/device_scanner
+flutter create --platforms=android --org com.casavino --project-name bubble .
+# Preserve/restore the repository's lib and pubspec.yaml if Flutter rewrites them.
+bash tool/prepare_android.sh
+flutter pub get
+flutter analyze lib/models/radio_device.dart lib/ui/nearby.dart test
+flutter test
+flutter build apk --debug
+```
+
+The GitHub Actions Android workflow preserves sources, generates the scaffold,
+installs native overlays, tests, builds and publishes the `mobile-latest` release.
+Its APK is at:
+https://github.com/Casa-Vino/Network-program-bubble/releases/download/mobile-latest/app-debug.apk
+
+## S21 Ultra acceptance checks
+
+1. Install alongside the original Device Scanner; both must remain available.
+2. Deny permissions initially: no crash; capabilities and status explain missing access.
+3. Grant permissions, turn on radios and Location services. Scan near a router,
+   a BLE advertiser and a Classic device explicitly placed in discoverable mode.
+4. Verify each method produces results or an actionable status; unnamed BLE
+   advertisements must still appear. Capability flags must reflect the phone.
+5. Follow a BLE device, move closer/further and compare repeated signal samples.
+   Stop advertising: last-seen age increases and stale guidance replaces trend.
+6. Repeat Wi-Fi scans quickly: cached results retain their original observation age.
+7. Background or close Nearby during scanning; Bluetooth discovery must stop.
+8. Open Network and confirm existing LAN discovery and transfer screens still work.
+
+## Platform references
+
+- https://developer.android.com/develop/connectivity/wifi/wifi-scan
+- https://developer.android.com/develop/connectivity/bluetooth/bt-permissions
+
+Future work: persistent user labels, SSDP enrichment, a proximity visualization,
+compatible companion-device ringing, and hardware-supported ranging.

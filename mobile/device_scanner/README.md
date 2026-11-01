@@ -1,4 +1,6 @@
-# Device Scanner (Flutter: Android + Windows)
+# Bubble (Flutter: Android + Windows)
+
+> Bubble wireless discovery: see [BUBBLE.md](../../BUBBLE.md) for Nearby scanning and signal history.
 
 > Windows desktop build: CI (`.github/workflows/build-windows.yml`) produces
 > `device-scanner-windows-x64.zip` on the rolling release. Unzip and run
@@ -29,10 +31,10 @@ installable debug APK in the cloud and publishes it to a rolling release:
    green — a few minutes.
 2. On your phone, open the repo's **Releases** page and the
    **`mobile-latest`** release, or go straight to:
-   `https://github.com/Casa-Vino/Network-program/releases/download/mobile-latest/app-debug.apk`
+   `https://github.com/Casa-Vino/Network-program-bubble/releases/download/mobile-latest/app-debug.apk`
 3. Android will ask to allow installing from your browser/Files app the first
    time ("Install unknown apps") — allow it, then open the APK to install.
-4. Launch **Device Scanner**, tap **Scan**, and grant the location / nearby-
+4. Launch **Bubble**, tap **Scan**, and grant the location / nearby-
    devices permission it requests.
 
 The APK is also attached to each workflow run as an artifact (**Actions** →
@@ -179,7 +181,7 @@ drop them in.
 2. Scaffold a project and overlay these files:
 
    ```bash
-   flutter create --org com.example --platforms=android device_scanner_app
+   flutter create --org com.casavino --project-name bubble --platforms=android device_scanner_app
    cd device_scanner_app
    # copy this folder's lib/ and pubspec.yaml over the generated ones
    cp -r /path/to/mobile/device_scanner/lib .

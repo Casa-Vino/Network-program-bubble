@@ -10,6 +10,7 @@ import 'services/admin_audit.dart';
 import 'services/discovery.dart';
 import 'services/updater.dart';
 import 'ui/receive_files.dart';
+import 'ui/nearby.dart';
 import 'ui/send_files.dart';
 import 'ui/smb_browser.dart';
 
@@ -22,7 +23,7 @@ class DeviceScannerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final seed = const Color(0xFF0E8388);
     return MaterialApp(
-      title: 'Device Scanner',
+      title: 'Bubble',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
           colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
@@ -153,8 +154,10 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Devices on your network'),
+        title: const Text('Bubble · Network'),
         actions: [
+          IconButton(icon: const Icon(Icons.radar), tooltip: 'Nearby wireless devices',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyPage()))),
           IconButton(
             icon: const Icon(Icons.download_for_offline),
             tooltip: 'Receive from a nearby device',
