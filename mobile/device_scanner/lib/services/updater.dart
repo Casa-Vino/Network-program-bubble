@@ -29,7 +29,7 @@ class UpdateInfo {
 
 class Updater {
   static const String versionUrl =
-      'https://github.com/Casa-Vino/Network-program/releases/download/mobile-latest/version.json';
+      'https://github.com/Casa-Vino/Network-program-bubble/releases/download/mobile-latest/version.json';
 
   static Future<int> currentBuild() async {
     final info = await PackageInfo.fromPlatform();
