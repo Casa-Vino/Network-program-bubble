@@ -72,6 +72,7 @@ if [[ -f "$OVERLAY" ]]; then
   mkdir -p "$(dirname "$KOTLIN_DST")"
   cp "$OVERLAY" "$KOTLIN_DST"
   cp android_overlay/BubbleRadio.kt "$(dirname "$KOTLIN_DST")/BubbleRadio.kt"
+  cp android_overlay/BubbleRoom.kt "$(dirname "$KOTLIN_DST")/BubbleRoom.kt"
   echo "Installed MainActivity overlay at $KOTLIN_DST"
 else
   echo "WARNING: $OVERLAY missing; mDNS multicast lock will be unavailable." >&2
@@ -79,6 +80,14 @@ fi
 
 # Distinct launcher name; package identity comes from flutter create --project-name bubble.
 sed -i -E 's/android:label="[^"]*"/android:label="Bubble"/' "$MANIFEST"
+
+if ! grep -q 'android.permission.CAMERA' "$MANIFEST"; then
+  sed -i '/<application/i\    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />' "$MANIFEST"
+  sed -i '/<\/application>/i\        <meta-data android:name="com.google.ar.core" android:value="optional" />' "$MANIFEST"
+fi
+if ! grep -q 'com.google.ar:core' android/app/build.gradle; then
+  printf '\n dependencies { implementation "com.google.ar:core:1.46.0" }\n' >> android/app/build.gradle
+fi
 
 # 3) Align the Kotlin Gradle plugin with the kotlin-stdlib that plugins such as
 #    url_launcher pull in (1.9.x); the scaffold's default is older and fails

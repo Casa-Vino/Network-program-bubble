@@ -49,7 +49,32 @@ up to 60 displayed samples per identity and 6,000 points overall. Wi-Fi is mint,
 BLE cyan and Classic Bluetooth amber. Switching views keeps the active scan and
 selected source. Existing 30-second foreground scan limits still apply.
 
-## Build instructions
+## Experimental Room scan
+
+Nearby > select a device > Room scan (cube icon). Review the Google ARCore notice,
+start the camera and grant permission. If prompted, install/update Google Play
+Services for AR and reopen Room scan. Move slowly around textured, well-lit
+surfaces. Green points are camera-derived depth estimates, blue is the phone,
+and coloured signal dots mark where the phone took fresh readings. Use Scan
+signals to run another bounded discovery session. Rotate the map by dragging;
+adjust zoom with the slider. The reference grid is not a detected floor.
+
+This is an AR Optional feature. Unsupported devices retain normal discovery.
+Depth is explicitly checked at runtime; no synthetic room is substituted.
+There are no Cloud Anchors or geospatial features. The map stays in memory for
+this screen and is discarded on exit. Backgrounding pauses camera capture.
+Radio samples must be within 500 ms of a tracked pose and are recorded only
+once; cached Wi-Fi observations will normally be rejected. Geometry uses 5 cm
+voxel deduplication and a 15,000-point limit; signal history is capped at 2,000
+spatial samples. Depth is estimated, limited to 0.2–5 m, and may drift or miss
+dark, reflective or featureless surfaces. The display does not estimate the
+transmitter's position. Physical acceptance testing on the S21 Ultra is needed.
+
+Google ARCore processes camera/sensor data under Google's policies. The app
+shows Google's ARCore disclosure before requesting camera access, with a link
+to the Google Privacy Policy. ARCore SDK dependency is pinned to 1.46.0.
+
+## Build steps
 
 Use Flutter 3.24.0 (matching CI). Generate the platform scaffold before building:
 

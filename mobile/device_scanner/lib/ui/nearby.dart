@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/radio_device.dart';
 import 'signal_cloud.dart';
+import 'room_scan.dart';
 
 class NearbyPage extends StatefulWidget {
   const NearbyPage({super.key});
@@ -155,6 +156,18 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
     final target = selected == null ? null : devices[selected];
     return Scaffold(
       appBar: AppBar(title: const Text('Bubble · Nearby'), actions: [
+        if (_android)
+          IconButton(
+              tooltip: 'Scan room and map signals',
+              icon: const Icon(Icons.view_in_ar),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => RoomScanPage(
+                      source: target,
+                      refreshSignals: start,
+                      signalsActive: () => scanning,
+                      signalStatus: () => messages.isEmpty
+                          ? 'Tap Scan signals for fresh readings'
+                          : messages.last)))),
         if (_android)
           IconButton(
               tooltip: cloudMode ? 'Show device list' : 'Show signal cloud',

@@ -16,10 +16,13 @@ class MainActivity : FlutterActivity() {
     private val channelName = "device_scanner/multicast"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var radio: BubbleRadio? = null
+    private var room: BubbleRoom? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         radio = BubbleRadio(this, flutterEngine.dartExecutor.binaryMessenger)
+        room = BubbleRoom(this, flutterEngine.dartExecutor.binaryMessenger)
+        flutterEngine.platformViewsController.registry.registerViewFactory("bubble/room", room!!)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -55,9 +58,20 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        room?.close()
         radio?.stop()
         releaseLock()
         super.onDestroy()
+    }
+
+    override fun onPause() {
+        room?.pause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        room?.resume()
     }
 
     override fun onStop() {

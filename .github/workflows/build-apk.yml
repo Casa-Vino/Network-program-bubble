@@ -65,7 +65,7 @@ jobs:
       - name: Analyze Bubble additions and run tests
         working-directory: mobile/device_scanner
         run: |
-          flutter analyze lib/models/radio_device.dart lib/ui/nearby.dart lib/ui/signal_cloud.dart test
+          flutter analyze lib/models lib/ui/nearby.dart lib/ui/signal_cloud.dart lib/ui/room_scan.dart test
           flutter test
 
       # Sign every build with the committed debug keystore so updates install
