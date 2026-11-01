@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:device_scanner/ui/room_scan.dart';
+import 'package:device_scanner/models/radio_device.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +84,46 @@ void main() {
     expect(torchCommands, [true, false]);
     await emit({'cameraActive': false, 'torch': false});
     expect(button().onPressed, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets(
+      'room signal selector exposes other devices without reopening the map',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    RadioDevice device(String name) => RadioDevice(name, false)
+      ..update({
+        'kind': 'ble',
+        'name': name,
+        'detail': '',
+        'time': now,
+        'rssi': -60
+      });
+    final devices = [device('Keys'), device('Other phone')];
+    await tester.pumpWidget(MaterialApp(
+        home: RoomScanPage(
+            sources: () => devices,
+            refreshSignals: () async {},
+            signalsActive: () => false,
+            signalStatus: () => '')));
+    await tester.pump();
+    await messenger.handlePlatformMessage(
+        'bubble/room/events',
+        const StandardMethodCodec().encodeSuccessEnvelope({
+          'tracking': true,
+          'pose': [0.0, 0.0, 0.0],
+          'time': now
+        }),
+        (_) {});
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('room-source-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Other phone ·').last);
+    await tester.pumpAndSettle();
+    expect(
+        find.textContaining('Selected device: cyan = weaker'), findsOneWidget);
+    expect(find.textContaining('Other phone ·'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));

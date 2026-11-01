@@ -163,6 +163,7 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => RoomScanPage(
                       source: target,
+                      sources: () => devices.values,
                       refreshSignals: start,
                       signalsActive: () => scanning,
                       signalStatus: () => messages.isEmpty

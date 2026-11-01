@@ -38,13 +38,46 @@ void main() {
     expect(map.readings, isEmpty);
   });
   test('surface storage is voxel deduplicated and bounded', () {
-    final map = RoomMap();
+    final map = RoomMap(maxSurfacePoints: 60000);
     final data = frame(1000);
     data['points'] = [
-      for (var i = 0; i < 16000; i++) ...[i * 0.1, 0.0, 0.0]
+      for (var i = 0; i < 61000; i++) ...[i * 0.1, 0.0, 0.0]
     ];
     map.frame(data, null);
-    expect(map.surfaces.length, 15000);
+    expect(map.surfaces.length, 60000);
     expect(map.readings, isEmpty);
+  });
+  test('surface limit can increase and decrease without clearing signals', () {
+    final map = RoomMap(maxSurfacePoints: 1);
+    final data = frame(1000);
+    data['points'] = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    map.frame(data, source(1000));
+    expect(map.surfaces.length, 1);
+    map.setSurfaceLimit(3);
+    map.frame(data, null);
+    expect(map.surfaces.length, 2);
+    map.setSurfaceLimit(1);
+    expect(map.surfaces.length, 1);
+    expect(map.readings.length, 1);
+  });
+
+  test('multiple sources retain separate identities and duplicate guards', () {
+    final map = RoomMap();
+    final first = source(1000);
+    final second = RadioDevice('Other', false)
+      ..update({
+        'kind': 'ble',
+        'name': 'Other',
+        'detail': '',
+        'rssi': -80,
+        'time': 1000
+      });
+    map.frame(frame(1100), null, sources: [first, second]);
+    expect(map.readings.length, 2);
+    expect(map.readingCounts, {first.key: 1, second.key: 1});
+    expect(
+        map.readings.map((r) => r.sourceKey).toSet(), {first.key, second.key});
+    map.frame(frame(1200), null, sources: [first, second]);
+    expect(map.readings.length, 2);
   });
 }

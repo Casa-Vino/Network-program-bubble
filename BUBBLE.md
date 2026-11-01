@@ -71,10 +71,23 @@ There are no Cloud Anchors or geospatial features. The map stays in memory for
 this screen and is discarded on exit. Backgrounding pauses camera capture.
 Radio samples must be within 500 ms of a tracked pose and are recorded only
 once; cached Wi-Fi observations will normally be rejected. Geometry uses 5 cm
-voxel deduplication and a 15,000-point limit; signal history is capped at 2,000
+voxel deduplication and a default 150,000-point limit; signal history is capped at 8,000
 spatial samples. Depth is estimated, limited to 0.2–5 m, and may drift or miss
 dark, reflective or featureless surfaces. The display does not estimate the
 transmitter's position. Physical acceptance testing on the S21 Ultra is needed.
+
+Room scan's tuning menu selects 60,000, 150,000 or 300,000 retained surface
+points. The highest setting is experimental; phone responsiveness needs testing.
+These are software limits, not a claimed hardware maximum. Lowering the limit
+discards the oldest excess surface cells. The 5 cm voxel spacing is unchanged,
+so a larger cap retains more coverage, not finer detail within the same cell.
+The renderer batches vertices into a typed buffer and avoids per-point trig.
+
+Room scan records fresh observations from all devices discovered by Nearby.
+Use the signal-layer selector to switch sources without clearing the map.
+All-device mode gives sources stable identity colours; an individual layer
+uses cyan for weaker readings and orange for stronger readings. Each marker
+is still the phone's measurement position, not the transmitter's location.
 
 Google ARCore processes camera/sensor data under Google's policies. The app
 shows Google's ARCore disclosure before requesting camera access, with a link
