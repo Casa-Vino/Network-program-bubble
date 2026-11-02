@@ -38,7 +38,7 @@ jobs:
           channel: stable
           flutter-version: "3.24.0"
 
-      # flutter create may rewrite pubspec.yaml / lib â€” keep ours.
+      # flutter create may rewrite pubspec.yaml / lib — keep ours.
       - name: Preserve app sources
         working-directory: mobile/device_scanner
         run: |
@@ -117,7 +117,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: bubble-dev-latest
-          name: Bubble Dev â€” latest test build
+          name: Bubble Dev — latest test build
           prerelease: true
           body: |
             Bubble Dev test APK auto-built from commit ${{ github.sha }}.

@@ -10,8 +10,8 @@ import '../app_identity.dart';
 ///
 /// A sideloaded app can't update itself silently (that needs system
 /// privileges), but it can download the new APK and hand it to Android's
-/// package installer, which â€” because every build is signed with the same
-/// committed debug keystore â€” updates in place with one tap.
+/// package installer, which — because every build is signed with the same
+/// committed debug keystore — updates in place with one tap.
 ///
 /// CI publishes `version.json` next to the APK on the rolling release. We
 /// compare its versionCode to this build's and offer the update when newer.
