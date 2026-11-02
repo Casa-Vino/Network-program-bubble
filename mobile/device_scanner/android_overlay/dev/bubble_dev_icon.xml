@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap android:src="@mipmap/ic_launcher" android:gravity="fill" />
+    </item>
+    <item android:width="28dp" android:height="28dp"
+        android:gravity="bottom|right" android:drawable="@drawable/bubble_dev_badge" />
+</layer-list>

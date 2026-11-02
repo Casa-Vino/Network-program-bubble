@@ -1,0 +1,133 @@
+name: Build Bubble Dev APK
+
+# Builds an installable debug APK for the Flutter scanner app in the cloud,
+# so no local Flutter/Android toolchain is needed. The APK is uploaded as a
+# run artifact and published to a rolling "bubble-dev-latest" release for easy
+# install on a phone.
+
+on:
+  push:
+    branches: [bubble-dev]
+    paths:
+      - "mobile/device_scanner/**"
+      - ".github/workflows/build-dev-apk.yml"
+  workflow_dispatch:
+
+# This workflow is dev-only, including manual runs from other branches.
+concurrency:
+  group: bubble-dev-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # needed to publish the APK to a release
+
+jobs:
+  build-apk:
+    if: github.ref == 'refs/heads/bubble-dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.24.0"
+
+      # flutter create may rewrite pubspec.yaml / lib â€” keep ours.
+      - name: Preserve app sources
+        working-directory: mobile/device_scanner
+        run: |
+          mkdir -p /tmp/appsrc
+          cp pubspec.yaml /tmp/appsrc/pubspec.yaml
+          cp -r lib /tmp/appsrc/lib
+          cp -r test /tmp/appsrc/test
+
+      - name: Generate Android scaffold
+        working-directory: mobile/device_scanner
+        run: flutter create --platforms=android --org com.casavino --project-name bubble .
+
+      - name: Restore app sources
+        working-directory: mobile/device_scanner
+        run: |
+          cp /tmp/appsrc/pubspec.yaml pubspec.yaml
+          rm -rf lib
+          cp -r /tmp/appsrc/lib lib
+          rm -rf test
+          cp -r /tmp/appsrc/test test
+
+      - name: Prepare Android scaffold (permissions + native overlay)
+        working-directory: mobile/device_scanner
+        run: |
+          bash tool/prepare_android.sh
+          python3 tool/prepare_dev.py
+
+      - name: Install dependencies
+        working-directory: mobile/device_scanner
+        run: flutter pub get
+
+      - name: Analyze Bubble additions and run tests
+        working-directory: mobile/device_scanner
+        run: |
+          flutter analyze lib/app_identity.dart lib/models lib/ui/nearby.dart lib/ui/signal_cloud.dart lib/ui/room_scan.dart test
+          flutter test --dart-define=BUBBLE_DEV=true
+          flutter test test/app_identity_test.dart
+
+      # Sign every build with the committed debug keystore so updates install
+      # over the top instead of hitting a signature conflict.
+      - name: Use stable debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          cp mobile/device_scanner/android-debug.keystore "$HOME/.android/debug.keystore"
+
+      - name: Build debug APK
+        working-directory: mobile/device_scanner
+        run: |
+          set -o pipefail
+          flutter build apk --debug --dart-define=BUBBLE_DEV=true \
+            --build-number=${{ github.run_number }} \
+            --build-name=0.1.${{ github.run_number }} \
+            2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Name development APK
+        working-directory: mobile/device_scanner
+        run: cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/bubble-dev.apk
+
+      # version.json lets the in-app updater know when a newer build exists.
+      - name: Write version manifest
+        working-directory: mobile/device_scanner
+        run: |
+          cat > version.json <<JSON
+          {"versionCode": ${{ github.run_number }}, "versionName": "0.1.${{ github.run_number }}", "sha": "${{ github.sha }}", "apk": "https://github.com/${{ github.repository }}/releases/download/bubble-dev-latest/bubble-dev.apk"}
+          JSON
+          cat version.json
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bubble-dev-apk
+          path: mobile/device_scanner/build/app/outputs/flutter-apk/bubble-dev.apk
+          if-no-files-found: error
+
+      - name: Publish APK to rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: bubble-dev-latest
+          name: Bubble Dev â€” latest test build
+          prerelease: true
+          body: |
+            Bubble Dev test APK auto-built from commit ${{ github.sha }}.
+
+            Installs alongside Bubble with a spanner badge and separate app data.
+            Includes existing room scanning and signal layers. Scan saving and
+            reconstruction are not included in this initial development build.
+
+            Install on Android: enable "Install unknown apps" for your browser
+            or Files app, then open `bubble-dev.apk`.
+          files: |
+            mobile/device_scanner/build/app/outputs/flutter-apk/bubble-dev.apk
+            mobile/device_scanner/version.json

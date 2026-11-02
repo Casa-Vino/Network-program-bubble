@@ -4,13 +4,14 @@ import 'dart:io';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import '../app_identity.dart';
 
 /// In-app updater for the sideloaded APK.
 ///
 /// A sideloaded app can't update itself silently (that needs system
 /// privileges), but it can download the new APK and hand it to Android's
-/// package installer, which — because every build is signed with the same
-/// committed debug keystore — updates in place with one tap.
+/// package installer, which â€” because every build is signed with the same
+/// committed debug keystore â€” updates in place with one tap.
 ///
 /// CI publishes `version.json` next to the APK on the rolling release. We
 /// compare its versionCode to this build's and offer the update when newer.
@@ -28,8 +29,7 @@ class UpdateInfo {
 }
 
 class Updater {
-  static const String versionUrl =
-      'https://github.com/Casa-Vino/Network-program-bubble/releases/download/mobile-latest/version.json';
+  static const String versionUrl = appVersionUrl;
 
   static Future<int> currentBuild() async {
     final info = await PackageInfo.fromPlatform();

@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'fingerprint/default_logins.dart';
+import 'app_identity.dart';
 import 'models/device.dart';
 import 'services/admin_audit.dart';
 import 'services/discovery.dart';
@@ -23,7 +24,7 @@ class DeviceScannerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final seed = const Color(0xFF0E8388);
     return MaterialApp(
-      title: 'Bubble',
+      title: appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
           colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
@@ -60,7 +61,7 @@ class _ScanPageState extends State<ScanPage> {
       _error = null;
       _devices = [];
       _progress = 0;
-      _status = 'Starting…';
+      _status = 'Startingâ€¦';
     });
 
     try {
@@ -87,7 +88,7 @@ class _ScanPageState extends State<ScanPage> {
       return;
     }
     messenger.showSnackBar(
-        const SnackBar(content: Text('Checking for updates…')));
+        const SnackBar(content: Text('Checking for updatesâ€¦')));
     final info = await Updater.check();
     if (!mounted) return;
     if (info == null) {
@@ -154,7 +155,7 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bubble · Network'),
+        title: const Text('$appName Â· Network'),
         actions: [
           IconButton(icon: const Icon(Icons.radar), tooltip: 'Nearby wireless devices',
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyPage()))),
@@ -191,7 +192,7 @@ class _ScanPageState extends State<ScanPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _scanning ? null : _scan,
         icon: Icon(_scanning ? Icons.hourglass_top : Icons.wifi_find),
-        label: Text(_scanning ? 'Scanning…' : 'Scan'),
+        label: Text(_scanning ? 'Scanningâ€¦' : 'Scan'),
       ),
       body: _buildBody(context),
     );
@@ -206,7 +207,7 @@ class _ScanPageState extends State<ScanPage> {
     }
     if (_scanning && _devices.isEmpty) {
       return _Centered(
-          icon: Icons.radar, title: _status, subtitle: 'Probing the local subnet…');
+          icon: Icons.radar, title: _status, subtitle: 'Probing the local subnetâ€¦');
     }
     if (_devices.isEmpty) {
       return const _Centered(
@@ -279,7 +280,7 @@ class _DeviceTileState extends State<_DeviceTile> {
         ],
       ),
       subtitle: Text(
-        [device.ip, if (device.hostname != null) device.hostname!].join('  •  '),
+        [device.ip, if (device.hostname != null) device.hostname!].join('  â€¢  '),
       ),
       childrenPadding: const EdgeInsets.fromLTRB(72, 0, 16, 16),
       expandedCrossAxisAlignment: CrossAxisAlignment.start,
@@ -334,7 +335,7 @@ class _DeviceTileState extends State<_DeviceTile> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.vpn_key, size: 18),
-                  label: Text(_auditing ? 'Checking…' : 'Check default login'),
+                  label: Text(_auditing ? 'Checkingâ€¦' : 'Check default login'),
                   onPressed: _auditing ? null : _confirmAndAudit,
                 ),
               ],
@@ -404,7 +405,7 @@ class _DeviceTileState extends State<_DeviceTile> {
         content: Text(
           'Only do this on devices you own or are authorized to manage.\n\n'
           'This reads ${device.webUrl} and, if it uses HTTP Basic auth, tries '
-          'a short list of well-known default logins. It is read-only — nothing '
+          'a short list of well-known default logins. It is read-only â€” nothing '
           'is changed, and login forms are not submitted.',
         ),
         actions: [
