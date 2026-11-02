@@ -165,6 +165,7 @@ class _NearbyPageState extends State<NearbyPage> with WidgetsBindingObserver {
                       source: target,
                       sources: () => devices.values,
                       refreshSignals: start,
+                      stopSignals: stop,
                       signalsActive: () => scanning,
                       signalStatus: () => messages.isEmpty
                           ? 'Tap Scan signals for fresh readings'

@@ -77,7 +77,7 @@ void main() {
                     status: '',
                     onSelect: (value) => setState(() => selected = value))))));
     expect(find.textContaining('no physical positions'), findsOneWidget);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Keys'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Keys · Keys'));
     await tester.pump();
     expect(selected, key.key);
     await tester.tap(find.byTooltip('Isolate selected source'));

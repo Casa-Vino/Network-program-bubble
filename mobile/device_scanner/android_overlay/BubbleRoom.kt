@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import com.google.ar.core.ArCoreApk
+import com.google.ar.core.Anchor
+import com.google.ar.core.Pose
 import com.google.ar.core.Config
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
@@ -32,7 +34,8 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
     private var active: RoomView? = null
     init {
         MethodChannel(messenger, "bubble/room").setMethodCallHandler { call, result ->
-            if (call.method != "setTorch") result.notImplemented()
+            if (call.method == "endScan") { close(); result.success(null) }
+            else if (call.method != "setTorch") result.notImplemented()
             else {
                 val view = active
                 if (view == null) result.error("camera_inactive", "Start the room camera first", null)
@@ -56,6 +59,7 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
     private inner class RoomView : PlatformView, GLSurfaceView.Renderer {
         private val surface = GLSurfaceView(activity)
         private var session: Session? = null
+        private var origin: Anchor? = null
         @Volatile private var running = false
         @Volatile private var disposed = false
         @Volatile private var lifecycleEpoch = 0
@@ -131,6 +135,8 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
             if (disposed) return
             pause()
             disposed = true
+            origin?.detach()
+            origin = null
             session?.close()
             session = null
             if (active === this) active = null
@@ -166,7 +172,15 @@ class BubbleRoom(private val activity: Activity, messenger: BinaryMessenger) : P
                     emit(mapOf("state" to "Tracking paused: ${camera.trackingFailureReason}. Move slowly in good light.", "tracking" to false))
                     return
                 }
-                val pose = camera.pose
+                // Persist points relative to one gravity-aligned anchor. ARCore
+                // may revise its world coordinates between successive frames.
+                if (origin == null) origin = s.createAnchor(Pose.makeTranslation(camera.pose.translation))
+                val anchor = origin!!
+                if (anchor.trackingState != TrackingState.TRACKING) {
+                    emit(mapOf("state" to "Waiting for scan anchor tracking", "tracking" to false))
+                    return
+                }
+                val pose = anchor.pose.inverse().compose(camera.pose)
                 val data = mutableMapOf<String, Any>("state" to "Tracking · move slowly to reveal surfaces", "tracking" to true,
                     "time" to now, "pose" to listOf(pose.tx(), pose.ty(), pose.tz()))
                 try {

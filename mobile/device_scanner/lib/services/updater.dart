@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import '../app_identity.dart';
 
 /// In-app updater for the sideloaded APK.
 ///
@@ -28,8 +29,7 @@ class UpdateInfo {
 }
 
 class Updater {
-  static const String versionUrl =
-      'https://github.com/Casa-Vino/Network-program-bubble/releases/download/mobile-latest/version.json';
+  static const String versionUrl = appVersionUrl;
 
   static Future<int> currentBuild() async {
     final info = await PackageInfo.fromPlatform();

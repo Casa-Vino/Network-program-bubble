@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'fingerprint/default_logins.dart';
+import 'app_identity.dart';
 import 'models/device.dart';
 import 'services/admin_audit.dart';
 import 'services/discovery.dart';
@@ -23,7 +24,7 @@ class DeviceScannerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final seed = const Color(0xFF0E8388);
     return MaterialApp(
-      title: 'Bubble',
+      title: appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
           colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
@@ -154,7 +155,7 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bubble · Network'),
+        title: const Text('$appName · Network'),
         actions: [
           IconButton(icon: const Icon(Icons.radar), tooltip: 'Nearby wireless devices',
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyPage()))),
