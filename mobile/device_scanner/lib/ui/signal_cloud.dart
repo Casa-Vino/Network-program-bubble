@@ -211,15 +211,17 @@ class _SignalCloudState extends State<SignalCloud>
                       label:
                           'Rotatable signal-strength point cloud. Angles are layout only. Select a device using the buttons below.',
                       child: Stack(fit: StackFit.expand, children: [
-                        RepaintBoundary(
-                            child: CustomPaint(
-                                painter: _CloudPainter(
-                                    points: points,
-                                    yaw: yaw,
-                                    tilt: tilt,
-                                    selected: widget.selected,
-                                    sweep: sweep,
-                                    scanning: widget.scanning && !frozen))),
+                        ClipRect(
+                            child: RepaintBoundary(
+                                child: CustomPaint(
+                                    painter: _CloudPainter(
+                                        points: points,
+                                        yaw: yaw,
+                                        tilt: tilt,
+                                        selected: widget.selected,
+                                        sweep: sweep,
+                                        scanning:
+                                            widget.scanning && !frozen)))),
                         Positioned(
                             left: 18,
                             top: 14,
@@ -291,7 +293,7 @@ class _SignalCloudState extends State<SignalCloud>
                               child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                Text(chosen.label,
+                                Text(chosen.displayLabel,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -348,16 +350,18 @@ class _SignalCloudState extends State<SignalCloud>
                                           ? _mint
                                           : const Color(0xFF29443C))),
                               onPressed: () => widget.onSelect(d.key),
-                              child: Text(d.label,
+                              child: Text(d.displayLabel,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis));
                         })),
               Padding(
                   padding: EdgeInsets.fromLTRB(18, 4, 18, compact ? 80 : 95),
                   child: Text(
-                      widget.status.isEmpty
-                          ? 'Signals build the cloud as observations arrive. No camera or LiDAR is active.'
-                          : widget.status,
+                      !widget.scanning
+                          ? 'Scan idle · showing recent history. Tap Scan nearby for fresh readings.'
+                          : widget.status.isEmpty
+                              ? 'Signals build the cloud as observations arrive. No camera or LiDAR is active.'
+                              : widget.status,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

@@ -17,6 +17,8 @@ class RadioDevice {
   String get label => name.isEmpty
       ? 'Unnamed ${isWifi ? 'access point' : 'Bluetooth device'}'
       : name;
+  String get displayLabel =>
+      '$label · ${address.length > 8 ? address.substring(address.length - 8) : address}';
   SignalSample get latest => history.last;
   double get smoothed =>
       history

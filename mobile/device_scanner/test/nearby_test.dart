@@ -126,7 +126,7 @@ void main() {
     await tester.pump();
     expect(find.text('SIGNAL CLOUD'), findsOneWidget);
     expect(find.text('Stop scan'), findsOneWidget);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Keys'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Keys · AA:BB'));
     await tester.pump();
     await tester.tap(find.byTooltip('Show device list'));
     await tester.pump();
