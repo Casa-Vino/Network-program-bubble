@@ -1,17 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_identity.dart';
 import '../models/radio_device.dart';
 import '../models/room_map.dart';
+import '../models/room_review.dart';
+import '../models/room_export.dart';
 import '../models/saved_room.dart';
 import '../models/wall_fit.dart';
 import '../services/room_store.dart';
 import 'room_painter.dart';
+import 'room_signal_panel.dart';
 
 class RoomScanPage extends StatefulWidget {
   const RoomScanPage(
@@ -44,6 +49,36 @@ class _RoomScanPageState extends State<RoomScanPage>
   bool camera = false, requesting = false, refreshing = false;
   bool ended = false, busy = false, saved = false;
   bool processingFailed = false;
+  bool smoothDisplay = true,
+      interacting = false,
+      cleanReview = false,
+      autoSignals = false;
+  Timer? repeatSignals;
+  List<RoomPoint>? reviewPoints;
+  List<RoomPoint> _displayPoints = [];
+  RoomMap? _displayMap;
+  List<RoomPoint>? _displayReview;
+  int _displayRevision = -1, _displayBudget = -1;
+  Offset pan = Offset.zero;
+  double gestureZoom = 35;
+  List<RoomPoint> get displayPoints {
+    final budget = smoothDisplay ? (interacting ? 30000 : 60000) : 300000;
+    final filtered = cleanReview ? reviewPoints : null;
+    if (_displayMap != map ||
+        _displayRevision != map.surfaceRevision ||
+        _displayReview != filtered ||
+        _displayBudget != budget) {
+      final source = filtered ?? map.surfaces.values;
+      _displayPoints = sampleForDisplay(
+          source, filtered?.length ?? map.surfaces.length, budget);
+      _displayMap = map;
+      _displayRevision = map.surfaceRevision;
+      _displayReview = filtered;
+      _displayBudget = budget;
+    }
+    return _displayPoints;
+  }
+
   bool torch = false,
       torchAvailable = false,
       cameraActive = false,
@@ -63,7 +98,9 @@ class _RoomScanPageState extends State<RoomScanPage>
         for (final r in map.readings)
           r.sourceKey:
               '${r.sourceName} · ${r.sourceKey.length > 8 ? r.sourceKey.substring(r.sourceKey.length - 8) : r.sourceKey}',
-        for (final d in availableSources) d.key: d.displayLabel,
+        for (final d in availableSources)
+          if (!ended || map.readingCounts.containsKey(d.key))
+            d.key: d.displayLabel,
       };
   @override
   void initState() {
@@ -138,14 +175,121 @@ class _RoomScanPageState extends State<RoomScanPage>
       await widget.refreshSignals();
     } finally {
       if (mounted) setState(() => refreshing = false);
+      if (ended) {
+        try {
+          await widget.stopSignals?.call();
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<void> toggleAutoSignals(bool enabled) async {
+    repeatSignals?.cancel();
+    setState(() => autoSignals = enabled);
+    if (!enabled) return;
+    Future<void> tick() async {
+      if (!mounted ||
+          !autoSignals ||
+          ended ||
+          !cameraActive ||
+          refreshing ||
+          widget.signalsActive()) return;
+      try {
+        await refresh();
+        if (!mounted || !autoSignals || ended) return;
+        if (!widget.signalsActive()) {
+          repeatSignals?.cancel();
+          setState(() => autoSignals = false);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Repeat scanning stopped: a signal scan could not start. Check radio permissions and settings.')));
+        }
+      } catch (e) {
+        if (mounted) {
+          repeatSignals?.cancel();
+          setState(() {
+            autoSignals = false;
+            status = 'Signal scan failed: $e';
+          });
+        }
+      }
+    }
+
+    await tick();
+    if (mounted && autoSignals && !ended) {
+      repeatSignals =
+          Timer.periodic(const Duration(seconds: 32), (_) => tick());
+    }
+  }
+
+  Future<void> filterReview(bool enabled) async {
+    if (!ended || capture == null || busy) return;
+    if (!enabled) {
+      setState(() => cleanReview = false);
+      return;
+    }
+    setState(() {
+      busy = true;
+      status = 'Filtering isolated clusters for review…';
+    });
+    try {
+      final List<RoomPoint> filtered = reviewPoints ??
+          await compute<List<RoomPoint>, List<RoomPoint>>(
+              supportedReviewPoints, capture!.points);
+      if (mounted) {
+        setState(() {
+          reviewPoints = filtered;
+          cleanReview = true;
+          status =
+              'Review filter: ${filtered.length} supported points; ${capture!.points.length} captured points retained for saving and export.';
+        });
+      }
+      if (mounted) fitView();
+    } catch (e) {
+      if (mounted) setState(() => status = 'Review filter failed: $e');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> exportScan(RoomExport format) async {
+    final room = capture;
+    if (!ended || room == null || busy) return;
+    setState(() {
+      busy = true;
+      status = 'Preparing ${format.label}…';
+    });
+    try {
+      final bytes = await compute(exportRoom, RoomExportRequest(room, format));
+      final path = await FilePicker.platform.saveFile(
+          dialogTitle: format.label,
+          fileName:
+              'bubble-${room.created.microsecondsSinceEpoch}.${format.extension}',
+          type: FileType.custom,
+          allowedExtensions: [format.extension],
+          bytes: bytes);
+      if (path != null && !Platform.isAndroid && !Platform.isIOS) {
+        await File(path).writeAsBytes(bytes, flush: true);
+      }
+      if (mounted) {
+        setState(() => status = path == null
+            ? 'Export cancelled.'
+            : '${format.label} exported. Coordinates are metres in this scan frame.');
+      }
+    } catch (e) {
+      if (mounted) setState(() => status = 'Export failed: $e');
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
   Future<void> finishScan() async {
     if (busy || ended) return;
+    repeatSignals?.cancel();
     // Freeze first: queued native frames must not change the snapshot during IO.
     setState(() {
       ended = true;
+      autoSignals = false;
       busy = true;
       camera = false;
       cameraActive = false;
@@ -239,6 +383,8 @@ class _RoomScanPageState extends State<RoomScanPage>
       if (!mounted) return;
       setState(() {
         capture = room;
+        cleanReview = false;
+        reviewPoints = null;
         map = room.toMap();
         walls = room.walls;
         ended = true;
@@ -255,6 +401,9 @@ class _RoomScanPageState extends State<RoomScanPage>
   }
 
   void newScan() => setState(() {
+        cleanReview = false;
+        reviewPoints = null;
+        pan = Offset.zero;
         map = RoomMap();
         capture = null;
         walls = [];
@@ -267,11 +416,15 @@ class _RoomScanPageState extends State<RoomScanPage>
       });
   void fitView() {
     if (map.surfaces.isEmpty) return;
+    final points = cleanReview && reviewPoints != null
+        ? reviewPoints!
+        : map.surfaces.values;
+    if (points.isEmpty) return;
     var minX = double.infinity, minY = double.infinity, minZ = double.infinity;
     var maxX = -double.infinity,
         maxY = -double.infinity,
         maxZ = -double.infinity;
-    for (final p in map.surfaces.values) {
+    for (final p in points) {
       minX = math.min(minX, p.x);
       maxX = math.max(maxX, p.x);
       minY = math.min(minY, p.y);
@@ -280,14 +433,24 @@ class _RoomScanPageState extends State<RoomScanPage>
       maxZ = math.max(maxZ, p.z);
     }
     final size = viewport.currentContext?.size ?? const Size(300, 300);
-    final radius = math.sqrt(math.pow(maxX - minX, 2) +
-            math.pow(maxY - minY, 2) +
-            math.pow(maxZ - minZ, 2)) /
-        2;
+    final origin =
+        RoomPoint((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+    var halfX = .01, halfY = .01;
+    final cy = math.cos(yaw),
+        sy = math.sin(yaw),
+        ct = math.cos(tilt),
+        st = math.sin(tilt);
+    for (final p in points) {
+      final x = p.x - origin.x, y = p.y - origin.y, z = p.z - origin.z;
+      halfX = math.max(halfX, (x * cy - z * sy).abs());
+      halfY = math.max(halfY, (y * ct - (x * sy + z * cy) * st).abs());
+    }
     setState(() {
-      center =
-          RoomPoint((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
-      zoom = (math.min(size.width, size.height) * .42 / math.max(radius, .1))
+      pan = Offset.zero;
+      center = origin;
+      zoom = (math.min((size.width - 24) / (2 * halfX),
+                  (size.height - 24) / (2 * halfY)) *
+              .9)
           .clamp(3, 100);
     });
   }
@@ -308,6 +471,54 @@ class _RoomScanPageState extends State<RoomScanPage>
                         child:
                             Column(mainAxisSize: MainAxisSize.min, children: [
                           const Text('Room display and capture'),
+                          Wrap(spacing: 12, children: [
+                            TextButton(
+                                onPressed: () {
+                                  update(() {
+                                    yaw = 0;
+                                    tilt = math.pi / 2;
+                                  });
+                                  fitView();
+                                },
+                                child: const Text('Top-down view')),
+                            TextButton(
+                                onPressed: () {
+                                  update(() {
+                                    yaw = .3;
+                                    tilt = .45;
+                                  });
+                                  fitView();
+                                },
+                                child: const Text('Perspective view')),
+                          ]),
+                          SwitchListTile(
+                              title: const Text('Smoother point display'),
+                              subtitle: const Text(
+                                  'Draw fewer points while keeping the full capture'),
+                              value: smoothDisplay,
+                              onChanged: (v) =>
+                                  update(() => smoothDisplay = v)),
+                          SwitchListTile(
+                              title: const Text(
+                                  'Hide isolated clusters (review only)'),
+                              value: cleanReview,
+                              onChanged: !ended || busy
+                                  ? null
+                                  : (v) async {
+                                      await filterReview(v);
+                                      if (context.mounted) updateSheet(() {});
+                                    }),
+                          SwitchListTile(
+                              title: const Text('Repeat signal scans'),
+                              subtitle: const Text(
+                                  'While the room camera is active; stops on pause or End scan'),
+                              value: autoSignals,
+                              onChanged: !cameraActive || ended || busy
+                                  ? null
+                                  : (v) async {
+                                      await toggleAutoSignals(v);
+                                      if (context.mounted) updateSheet(() {});
+                                    }),
                           SwitchListTile(
                               title: const Text('Captured surface points'),
                               value: showPoints,
@@ -373,7 +584,9 @@ class _RoomScanPageState extends State<RoomScanPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed && mounted) {
+      repeatSignals?.cancel();
       setState(() {
+        autoSignals = false;
         map.tracking = false;
         torch = false;
         cameraActive = false;
@@ -383,6 +596,7 @@ class _RoomScanPageState extends State<RoomScanPage>
 
   @override
   void dispose() {
+    repeatSignals?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     events?.cancel();
     super.dispose();
@@ -422,10 +636,36 @@ class _RoomScanPageState extends State<RoomScanPage>
                     color: torch ? Colors.amber : null,
                     icon: Icon(
                         torch ? Icons.flashlight_on : Icons.flashlight_off)),
-                IconButton(
-                    tooltip: 'Fit room in view',
-                    onPressed: fitView,
-                    icon: const Icon(Icons.center_focus_strong)),
+                PopupMenuButton<String>(
+                    tooltip: 'Room tools',
+                    onSelected: (value) {
+                      if (value == 'fit') {
+                        fitView();
+                      } else if (value == 'top' || value == 'orbit') {
+                        setState(() {
+                          yaw = value == 'top' ? 0 : .3;
+                          tilt = value == 'top' ? math.pi / 2 : .45;
+                        });
+                        fitView();
+                      } else if (value.startsWith('export:')) {
+                        exportScan(RoomExport
+                            .values[int.parse(value.split(':').last)]);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                          const PopupMenuItem(
+                              value: 'fit', child: Text('Fit room in view')),
+                          const PopupMenuItem(
+                              value: 'top', child: Text('Top-down view')),
+                          const PopupMenuItem(
+                              value: 'orbit', child: Text('Perspective view')),
+                          const PopupMenuDivider(),
+                          for (final format in RoomExport.values)
+                            PopupMenuItem(
+                                value: 'export:${format.index}',
+                                enabled: ended && capture != null && !busy,
+                                child: Text('Export ${format.label}')),
+                        ]),
               ]),
           body: SafeArea(
               top: false,
@@ -477,6 +717,11 @@ class _RoomScanPageState extends State<RoomScanPage>
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: Colors.white54, fontSize: 10))),
+                RoomSignalPanel(
+                    sourceKey: sourceFilter,
+                    map: map,
+                    devices: availableSources,
+                    ended: ended),
                 Expanded(
                     child: ClipRect(
                         key: viewport,
@@ -485,11 +730,49 @@ class _RoomScanPageState extends State<RoomScanPage>
                             const AndroidView(viewType: 'bubble/room'),
                           GestureDetector(
                               key: const ValueKey('room-viewport'),
-                              onPanUpdate: (d) => setState(() {
-                                    yaw += d.delta.dx * .008;
-                                    tilt = (tilt + d.delta.dy * .006)
-                                        .clamp(-1.2, 1.2);
+                              onDoubleTap: fitView,
+                              onTapUp: (d) {
+                                final size = viewport.currentContext?.size;
+                                if (size == null || !showSignals) return;
+                                final origin = center ??
+                                    map.phone ??
+                                    const RoomPoint(0, 0, 0);
+                                var distance = 24.0;
+                                String? key;
+                                for (final r in map.readings.reversed) {
+                                  if (sourceFilter != '*' &&
+                                      r.sourceKey != sourceFilter) continue;
+                                  final delta = (projectRoomPoint(r, origin,
+                                              size, yaw, tilt, zoom, pan) -
+                                          d.localPosition)
+                                      .distance;
+                                  if (delta < distance) {
+                                    distance = delta;
+                                    key = r.sourceKey;
+                                  }
+                                }
+                                if (key != null) {
+                                  setState(() => sourceFilter = key!);
+                                }
+                              },
+                              onScaleStart: (_) => setState(() {
+                                    gestureZoom = zoom;
+                                    interacting = true;
                                   }),
+                              onScaleUpdate: (d) => setState(() {
+                                    if (d.pointerCount >= 2) {
+                                      zoom =
+                                          (gestureZoom * d.scale).clamp(3, 100);
+                                      pan += d.focalPointDelta;
+                                    } else {
+                                      yaw += d.focalPointDelta.dx * .008;
+                                      tilt =
+                                          (tilt + d.focalPointDelta.dy * .006)
+                                              .clamp(-1.45, math.pi / 2);
+                                    }
+                                  }),
+                              onScaleEnd: (_) =>
+                                  setState(() => interacting = false),
                               child: ColoredBox(
                                   color: const Color(0xFF050B0C),
                                   child: CustomPaint(
@@ -505,7 +788,9 @@ class _RoomScanPageState extends State<RoomScanPage>
                                           showWalls,
                                           showSignals,
                                           opacity,
-                                          pointSize)))),
+                                          pointSize,
+                                          pan: pan,
+                                          displayPoints: displayPoints)))),
                           if (!camera && !ended)
                             Center(
                                 child: SingleChildScrollView(
@@ -537,9 +822,11 @@ class _RoomScanPageState extends State<RoomScanPage>
                           if (busy)
                             const Center(child: CircularProgressIndicator()),
                         ]))),
-                const Text(
-                    'Drag to orbit · 1 m reference grid · not a detected floor',
-                    style: TextStyle(color: Colors.white54, fontSize: 10)),
+                Text(
+                    'Drag: orbit · 2 fingers: zoom/pan · tap a signal to follow\n1 m reference grid (not a floor) · ${showPoints ? displayPoints.length : 0} points drawn',
+                    textAlign: TextAlign.center,
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 10)),
                 Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -576,9 +863,7 @@ class _RoomScanPageState extends State<RoomScanPage>
                                 : 'Refit walls'))
                       else
                         TextButton(
-                            onPressed: availableSources.isEmpty ||
-                                    refreshing ||
-                                    widget.signalsActive()
+                            onPressed: refreshing || widget.signalsActive()
                                 ? null
                                 : refresh,
                             child: Text(widget.signalsActive()

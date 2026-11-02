@@ -20,10 +20,12 @@ class RoomMap {
   final readingCounts = <String, int>{};
   RoomPoint? phone;
   bool tracking = false;
+  int surfaceRevision = 0;
   int maxSurfacePoints;
   void setSurfaceLimit(int limit) {
     if (limit < 1) throw ArgumentError.value(limit, 'limit');
     maxSurfacePoints = limit;
+    surfaceRevision++;
     while (surfaces.length > limit) {
       surfaces.remove(surfaces.keys.first);
     }
@@ -43,6 +45,7 @@ class RoomMap {
     phone = RoomPoint(p[0], p[1], p[2]);
     final points = event['points'];
     if (points is List) {
+      surfaceRevision++;
       for (var i = 0; i + 2 < points.length; i += 3) {
         final x = (points[i] as num).toDouble(),
             y = (points[i + 1] as num).toDouble(),

@@ -4,6 +4,19 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/room_map.dart';
 import '../models/wall_fit.dart';
+import '../models/room_review.dart';
+
+Offset projectRoomPoint(RoomPoint p, RoomPoint origin, Size size, double yaw,
+    double tilt, double zoom, Offset pan) {
+  final x = p.x - origin.x, y = p.y - origin.y, z = p.z - origin.z;
+  return Offset(
+      size.width / 2 + pan.dx + (x * math.cos(yaw) - z * math.sin(yaw)) * zoom,
+      size.height / 2 +
+          pan.dy -
+          (y * math.cos(tilt) -
+                  (x * math.sin(yaw) + z * math.cos(yaw)) * math.sin(tilt)) *
+              zoom);
+}
 
 class RoomPainter extends CustomPainter {
   RoomPainter(
@@ -18,7 +31,11 @@ class RoomPainter extends CustomPainter {
       this.showWalls,
       this.showSignals,
       this.opacity,
-      this.pointSize);
+      this.pointSize,
+      {this.pan = Offset.zero,
+      this.displayPoints});
+  final Offset pan;
+  final List<RoomPoint>? displayPoints;
   final RoomMap map;
   final List<WallPolygon> walls;
   final RoomPoint? center;
@@ -36,8 +53,8 @@ class RoomPainter extends CustomPainter {
         st = math.sin(tilt);
     Offset project(RoomPoint p) {
       final x = p.x - origin.x, y = p.y - origin.y, z = p.z - origin.z;
-      return Offset(size.width / 2 + (x * cy - z * sy) * zoom,
-          size.height / 2 - (y * ct - (x * sy + z * cy) * st) * zoom);
+      return Offset(size.width / 2 + pan.dx + (x * cy - z * sy) * zoom,
+          size.height / 2 + pan.dy - (y * ct - (x * sy + z * cy) * st) * zoom);
     }
 
     final grid = Paint()
@@ -62,6 +79,7 @@ class RoomPainter extends CustomPainter {
         ..sort((a, b) => depth(b).compareTo(depth(a)));
       for (var i = 0; i < sorted.length; i++) {
         final wall = sorted[i];
+        final wallId = walls.indexOf(wall) + 1;
         final first = project(wall.vertices.first),
             path = Path()..moveTo(first.dx, first.dy);
         for (final v in wall.vertices.skip(1)) {
@@ -76,10 +94,13 @@ class RoomPainter extends CustomPainter {
               ..color = Colors.amberAccent
               ..style = PaintingStyle.stroke
               ..strokeWidth = 1.6);
+        final bounds = path.getBounds();
+        final compact = bounds.width < 120 || bounds.height < 80;
         final text = TextPainter(
             text: TextSpan(
-                text:
-                    'Candidate ${i + 1} · ${(wall.rms * 100).toStringAsFixed(1)} cm fit',
+                text: compact
+                    ? 'C$wallId'
+                    : 'Candidate $wallId · ${(wall.rms * 100).toStringAsFixed(1)} cm fit',
                 style: const TextStyle(
                     color: Colors.amberAccent,
                     fontFamily: 'Roboto',
@@ -104,13 +125,14 @@ class RoomPainter extends CustomPainter {
       }
     }
     if (showPoints) {
-      final vertices = Float32List(map.surfaces.length * 2);
+      final points = displayPoints ?? map.surfaces.values.toList();
+      final vertices = Float32List(points.length * 2);
       var index = 0;
-      for (final p in map.surfaces.values) {
+      for (final p in points) {
         final x = p.x - origin.x, y = p.y - origin.y, z = p.z - origin.z;
-        vertices[index++] = size.width / 2 + (x * cy - z * sy) * zoom;
+        vertices[index++] = size.width / 2 + pan.dx + (x * cy - z * sy) * zoom;
         vertices[index++] =
-            size.height / 2 - (y * ct - (x * sy + z * cy) * st) * zoom;
+            size.height / 2 + pan.dy - (y * ct - (x * sy + z * cy) * st) * zoom;
       }
       canvas.drawRawPoints(
           ui.PointMode.points,
@@ -136,7 +158,8 @@ class RoomPainter extends CustomPainter {
                   : Color.lerp(Colors.cyan, Colors.deepOrange, strength)!);
       }
       // Latest reading per identity, capped to avoid crowding the display.
-      for (final p in shown.values.take(8)) {
+      for (final p
+          in sourceFilter == '*' ? shown.values.take(8) : <RoomReading>[]) {
         final suffix = p.sourceKey.length > 8
             ? p.sourceKey.substring(p.sourceKey.length - 8)
             : p.sourceKey;
@@ -151,6 +174,36 @@ class RoomPainter extends CustomPainter {
             textDirection: TextDirection.ltr)
           ..layout();
         text.paint(canvas, project(p) + const Offset(6, -14));
+      }
+      if (sourceFilter != '*') {
+        final best = RoomSignalSummary(map.readings, sourceFilter).best;
+        if (best != null) {
+          final p = project(best);
+          canvas.drawCircle(
+              p,
+              10,
+              Paint()
+                ..color = Colors.white
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2);
+          final text = TextPainter(
+              text: TextSpan(
+                  text: 'Strongest measured ${best.rssi} dBm',
+                  style: const TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: 10,
+                      color: Colors.white,
+                      backgroundColor: Colors.black)),
+              textDirection: TextDirection.ltr)
+            ..layout();
+          text.paint(
+              canvas,
+              Offset(
+                  (p.dx + 12)
+                      .clamp(2, math.max(2, size.width - text.width - 2)),
+                  (p.dy + 8)
+                      .clamp(2, math.max(2, size.height - text.height - 2))));
+        }
       }
     }
     if (map.phone != null) {

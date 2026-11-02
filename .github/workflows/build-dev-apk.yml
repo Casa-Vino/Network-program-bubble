@@ -73,7 +73,7 @@ jobs:
       - name: Analyze Bubble additions and run tests
         working-directory: mobile/device_scanner
         run: |
-          flutter analyze lib/app_identity.dart lib/models lib/services/room_store.dart lib/ui/nearby.dart lib/ui/signal_cloud.dart lib/ui/room_scan.dart lib/ui/room_painter.dart test
+          flutter analyze lib/app_identity.dart lib/models lib/services/room_store.dart lib/ui/nearby.dart lib/ui/signal_cloud.dart lib/ui/room_scan.dart lib/ui/room_painter.dart lib/ui/room_signal_panel.dart test
           flutter test --dart-define=BUBBLE_DEV=true
           flutter test test/app_identity_test.dart
 
@@ -127,6 +127,9 @@ jobs:
             Reopen scans from the folder. Display settings control point, wall and
             signal layers, surface opacity, point size and zoom. Wall polygons are
             experimental estimates and may include furniture or span openings.
+            Adds pinch/pan navigation, top-down view, smoother point display,
+            optional isolated-cluster review filtering, strongest-reading markers,
+            repeat signal scans and JSON/PLY/OBJ/CSV exports from Room tools.
 
             Install on Android: enable "Install unknown apps" for your browser
             or Files app, then open `bubble-dev.apk`.

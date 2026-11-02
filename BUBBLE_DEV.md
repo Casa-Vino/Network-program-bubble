@@ -15,6 +15,36 @@ its viewport. Display settings independently control captured points, candidate
 walls, signal markers, surface opacity, point size and zoom. Device labels include
 an address suffix, and idle discovery no longer displays a stale listening status.
 
+Room navigation supports one-finger orbit, two-finger pinch zoom and pan, and
+double-tap to fit. **Room tools** (three dots) provides top-down, perspective and
+fit views. Fit uses the current projected bounds. The smoother display caches
+an evenly sampled copy, drawing up to 60,000 points normally or 30,000 during
+gestures; disable it to draw all captured points. Capture limits remain separate.
+**Hide isolated clusters** is an optional ended-scan review filter: 20 cm cells
+need five nearby points spanning at least three neighbouring cells. It can hide
+real sparse features, so it starts off. It changes the display only; saved points,
+wall fitting and exports retain the original capture. Drawn counts are visible.
+
+Tap a signal marker or choose a device to follow it. The selected device panel
+shows fresh RSSI/trend feedback, stale-reading guidance, and its strongest mapped
+measurement. A white ring marks that measurement's **phone position**, not the
+transmitter. Saved scans show historical measurements, not live tracking.
+**Repeat signal scans** is optional in display settings while the room camera is
+active. It starts a new foreground discovery session every 32 seconds when the
+previous session has ended, and switches off on app pause or End scan. Failed
+starts switch repeat scanning off. The Scan signals button also works before
+any devices have been discovered.
+
+After ending or reopening a scan, **Room tools** exports full scan JSON, raw
+captured points as ASCII PLY, candidate wall polygons as OBJ, or signal
+measurements as CSV through the system save dialog. Exports use metres and the
+scan's Y-up anchor frame. PLY contains every retained captured point, including
+points hidden by display sampling or review filtering. OBJ contains supported
+candidate patches, with no invented thickness or missing walls. CSV records
+phone measurement coordinates and escapes network-provided names as spreadsheet
+text. JSON preserves all snapshot fields; it does not enable resuming an old
+ARCore session. No export is created until a save location is chosen.
+
 Press **End scan** to freeze observations, release the camera/torch, stop radio
 discovery, save the captured points and radio measurements, and interpret walls
 on a background isolate. Raw points are saved before fitting. The folder button

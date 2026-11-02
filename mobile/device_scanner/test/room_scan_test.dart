@@ -4,6 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:device_scanner/ui/room_scan.dart';
 import 'package:device_scanner/models/radio_device.dart';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
+import 'package:device_scanner/ui/room_painter.dart';
+import 'package:device_scanner/models/room_map.dart';
 import 'package:device_scanner/models/saved_room.dart';
 import 'package:device_scanner/services/room_store.dart';
 
@@ -23,6 +28,24 @@ class MemoryRoomStore extends RoomStore {
   Future<SavedRoom> load(File file) async => snapshots.last;
 }
 
+class ExportPicker extends FilePicker {
+  ExportPicker(this.destination);
+  final String? destination;
+  Uint8List? received;
+  @override
+  Future<String?> saveFile(
+      {String? dialogTitle,
+      String? fileName,
+      String? initialDirectory,
+      FileType type = FileType.any,
+      List<String>? allowedExtensions,
+      Uint8List? bytes,
+      bool lockParentWindow = false}) async {
+    received = bytes;
+    return destination;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const events = MethodChannel('bubble/room/events');
@@ -33,6 +56,7 @@ void main() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   setUp(() {
+    FilePicker.platform = ExportPicker(null);
     torchCommands.clear();
     endedCommands = 0;
     messenger.setMockMethodCallHandler(room, (call) async {
@@ -274,6 +298,192 @@ void main() {
             .widget<FilledButton>(find.widgetWithText(FilledButton, 'New scan'))
             .onPressed,
         isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets(
+      'review supports top-down navigation and exports the full captured points',
+      (tester) async {
+    final store = MemoryRoomStore();
+    store.snapshots.add(SavedRoom(
+        DateTime(2026),
+        [const RoomPoint(-1, 0, -1), const RoomPoint(1, 2, 1)],
+        [],
+        const RoomPoint(0, 0, 0)));
+    final dir = await tester
+        .runAsync(() => Directory.systemTemp.createTemp('bubble-export'));
+    final previous = FilePicker.platform;
+    final picker = ExportPicker('${dir!.path}/scan.ply');
+    FilePicker.platform = picker;
+    addTearDown(() async {
+      FilePicker.platform = previous;
+      await dir.delete(recursive: true);
+    });
+    await tester.pumpWidget(MaterialApp(
+        home: RoomScanPage(
+            store: store,
+            refreshSignals: () async {},
+            signalsActive: () => false,
+            signalStatus: () => '')));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Saved scans'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(SimpleDialogOption));
+    await tester.pumpAndSettle();
+    RoomPainter painter() => tester
+        .widget<CustomPaint>(find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter is RoomPainter))
+        .painter! as RoomPainter;
+    await tester.tap(find.byTooltip('Room tools'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Top-down view'));
+    await tester.pumpAndSettle();
+    expect(painter().tilt, closeTo(math.pi / 2, .001));
+    final before = painter().zoom;
+    final center =
+        tester.getCenter(find.byKey(const ValueKey('room-viewport')));
+    final a =
+        await tester.startGesture(center + const Offset(-40, 0), pointer: 1);
+    final b =
+        await tester.startGesture(center + const Offset(40, 0), pointer: 2);
+    await tester.pump();
+    await a.moveBy(const Offset(20, 15));
+    await b.moveBy(const Offset(-20, 15));
+    await tester.pump();
+    await a.up();
+    await b.up();
+    await tester.pumpAndSettle();
+    expect(painter().zoom, lessThan(before));
+    expect(painter().pan, isNot(Offset.zero));
+    await tester.tap(find.byTooltip('Room display settings'));
+    await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.text('Hide isolated clusters (review only)'));
+    await tester.tap(find.text('Hide isolated clusters (review only)'));
+    for (var i = 0; i < 200 && painter().displayPoints!.isNotEmpty; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Done'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(painter().displayPoints, isEmpty);
+    expect(painter().map.surfaces.length, 2);
+    await tester.tap(find.byTooltip('Room tools'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export Captured points PLY'));
+    for (var i = 0; i < 200 && picker.received == null; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    for (var i = 0;
+        i < 30 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+        i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(utf8.decode(picker.received!), contains('element vertex 2\n'));
+    expect(await tester.runAsync(() => File(picker.destination!).exists()),
+        isTrue);
+    expect(find.textContaining('Captured points PLY exported'), findsOneWidget);
+    final cancelled = ExportPicker(null);
+    FilePicker.platform = cancelled;
+    await tester.tap(find.byTooltip('Room tools'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export Full scan JSON'));
+    for (var i = 0; i < 200 && cancelled.received == null; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Export cancelled.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('repeat signal scans require an active camera and stop on pause',
+      (tester) async {
+    var active = false, scans = 0;
+    final store = MemoryRoomStore();
+    await tester.pumpWidget(MaterialApp(
+        home: RoomScanPage(
+            store: store,
+            stopSignals: () async {
+              active = false;
+            },
+            refreshSignals: () async {
+              scans++;
+              active = true;
+            },
+            signalsActive: () => active,
+            signalStatus: () => '')));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Room display settings'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, 'Repeat signal scans'))
+            .onChanged,
+        isNull);
+    await tester.ensureVisible(find.text('Done'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    await messenger.handlePlatformMessage(
+        'bubble/room/events',
+        const StandardMethodCodec()
+            .encodeSuccessEnvelope({'cameraActive': true}),
+        (_) {});
+    await tester.pump();
+    await tester.tap(find.byTooltip('Room display settings'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Repeat signal scans'));
+    await tester.tap(find.text('Repeat signal scans'));
+    await tester.pumpAndSettle();
+    expect(scans, 1);
+    active = false;
+    await tester.pump(const Duration(seconds: 32));
+    await tester.pump();
+    expect(scans, 2);
+    await tester.ensureVisible(find.text('Done'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    active = false;
+    await tester.pump(const Duration(seconds: 64));
+    expect(scans, 2);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await messenger.handlePlatformMessage(
+        'bubble/room/events',
+        const StandardMethodCodec()
+            .encodeSuccessEnvelope({'cameraActive': true}),
+        (_) {});
+    await tester.pump();
+    await tester.tap(find.byTooltip('Room display settings'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Repeat signal scans'));
+    await tester.tap(find.text('Repeat signal scans'));
+    await tester.pumpAndSettle();
+    expect(scans, 3);
+    await tester.ensureVisible(find.text('Done'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('end-room-scan')));
+    for (var i = 0; i < 200 && store.snapshots.length < 2; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 64));
+    expect(scans, 3);
+    expect(active, isFalse);
+    expect(endedCommands, 1);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }
